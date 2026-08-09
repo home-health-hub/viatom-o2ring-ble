@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a problem with viatom-o2ring-ble
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Output of `pip show viatom-o2ring-ble` or the commit/tag in use
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device model
+      description: e.g. O2Ring, O2 Max, KidsO2, CMRing. NOT O2Ring S/S8-AW/Band-WU/SHQO2Pro -- those use an incompatible protocol, see the README.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS, Python version, and Bluetooth adapter/backend (e.g. BlueZ, WinRT, CoreBluetooth)
+    validations:
+      required: true
+  - type: dropdown
+    id: sensors-mode
+    attributes:
+      label: Live-reading mode
+      description: Default (CMD_RT_DATA/0x1B) or legacy_sensors=True (CMD_READ_SENSORS/0x17)? Only relevant if the issue involves live readings.
+      options:
+        - Default (RT_DATA)
+        - legacy_sensors=True
+        - Not applicable
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you run, and what happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: Run with `--verbose` (CLI) or `logging.basicConfig(level=logging.DEBUG)` and paste relevant output.
+      render: shell
