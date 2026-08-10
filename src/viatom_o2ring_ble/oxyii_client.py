@@ -54,6 +54,39 @@ DEFAULT_COOLDOWN_SECONDS = 5
 DEFAULT_REQUEST_TIMEOUT = 10.0
 DEFAULT_READ_PERIOD = 2.0
 
+_LOGGER = logging.getLogger(__name__)
+
+
+def _oxyii_advertisement_mode(
+    local_name: str | None, manufacturer_data: dict[int, bytes] | None = None
+) -> str | None:
+    """Classify an advertisement as "sync" mode, "recording" mode, or not this family.
+
+    The distinction matters beyond just recognizing the device: recording
+    mode and sync mode use *different BLE addresses* (a "public-style"
+    address in recording mode vs. a Random Static address in sync mode --
+    see RECORDING_MODE_NAME_PREFIX's docstring). An address only ever seen
+    in recording mode isn't just "maybe not connectable yet" -- it is
+    reliably a different address than the one that would actually work,
+    since the GATT/auth handshake needs sync mode's address specifically.
+    discover_oxyii() uses this to avoid ever handing back a recording-mode
+    address when a sync-mode one was also seen.
+
+    Returns:
+        "sync" if manufacturer_data or local_name confirms OxyII/sync
+        mode, "recording" if local_name only matches the recording-mode
+        prefix, or None if neither matches this device family at all.
+    """
+    if manufacturer_data and MANUFACTURER_ID in manufacturer_data:
+        return "sync"
+    if not local_name:
+        return None
+    if local_name.startswith(LOCAL_NAME_PREFIX):
+        return "sync"
+    if local_name.startswith(RECORDING_MODE_NAME_PREFIX):
+        return "recording"
+    return None
+
 
 def supported_oxyii(
     local_name: str | None, manufacturer_data: dict[int, bytes] | None = None
@@ -63,33 +96,68 @@ def supported_oxyii(
     Manufacturer ID is the most reliable signal, matching Viatom's own
     "OxyII / sync mode" advertisements (local name prefix "S8-AW", the
     mode that actually exposes the OxyII GATT service). "Recording mode"
-    (name prefix "T8520_<last4>") is also recognized so discover_oxyii()
-    can at least report the device is nearby, but a device only ever seen
-    in that mode isn't necessarily connectable for file transfer yet --
-    wearing it or pressing its button is enough to trigger a re-advertise
-    into OxyII mode.
+    (name prefix "T8520_<last4>") is also recognized so a caller can tell
+    the device is nearby, but see discover_oxyii() -- its address in that
+    mode is not usable for a real connection; _oxyii_advertisement_mode()
+    is what actually distinguishes the two for that purpose.
     """
-    if manufacturer_data and MANUFACTURER_ID in manufacturer_data:
-        return True
-    if not local_name:
-        return False
-    return local_name.startswith(LOCAL_NAME_PREFIX) or local_name.startswith(
-        RECORDING_MODE_NAME_PREFIX
-    )
+    return _oxyii_advertisement_mode(local_name, manufacturer_data) is not None
+
+
+def _select_oxyii_devices(
+    sync_found: dict[str, BLEDevice], recording_found: dict[str, BLEDevice]
+) -> list[BLEDevice]:
+    """Pick discover_oxyii()'s return value from mode-tagged sightings.
+
+    Split out as a pure/synchronous function (no BLE scanning) so this
+    preference logic is unit-testable without a real adapter.
+
+    If any sync-mode device was seen, only sync-mode devices are
+    returned, even if recording-mode-only devices were also seen; a
+    recording-mode address is reliably the *wrong* address to act on (see
+    _oxyii_advertisement_mode's docstring), not just an unconfirmed one.
+    Only falls back to recording-mode addresses if no sync-mode device
+    was seen at all -- with a warning, since a caller (e.g. a daemon
+    persisting "the" discovered address) that acts on one of these will
+    very likely fail to connect.
+    """
+    if sync_found:
+        return list(sync_found.values())
+
+    if recording_found:
+        _LOGGER.warning(
+            "Found %d O2Ring-S device(s) only in recording mode (name prefix %r) -- "
+            "their address is NOT usable for a real connection (sync mode uses a "
+            "different address). Wake the device into sync mode (stop wearing it, "
+            "or press its button) and scan again.",
+            len(recording_found),
+            RECORDING_MODE_NAME_PREFIX,
+        )
+    return list(recording_found.values())
 
 
 async def discover_oxyii(timeout: float = 10.0) -> list[BLEDevice]:
-    """Scan for nearby O2Ring-S (T8520) devices, in either advertising mode."""
-    found: dict[str, BLEDevice] = {}
+    """Scan for nearby O2Ring-S (T8520) devices.
+
+    Prefers devices confirmed in OxyII/sync mode -- the only mode whose
+    address is actually usable for a full connection (GATT discovery,
+    auth handshake, file transfer) -- over recording-mode-only sightings.
+    See _select_oxyii_devices for the exact preference/fallback logic.
+    """
+    sync_found: dict[str, BLEDevice] = {}
+    recording_found: dict[str, BLEDevice] = {}
 
     def _callback(device: BLEDevice, adv: AdvertisementData) -> None:
-        if supported_oxyii(device.name, adv.manufacturer_data):
-            found[device.address] = device
+        mode = _oxyii_advertisement_mode(device.name, adv.manufacturer_data)
+        if mode == "sync":
+            sync_found[device.address] = device
+        elif mode == "recording":
+            recording_found[device.address] = device
 
     async with BleakScanner(detection_callback=_callback):
         await asyncio.sleep(timeout)
 
-    return list(found.values())
+    return _select_oxyii_devices(sync_found, recording_found)
 
 
 class InsufficientMtuError(RuntimeError):

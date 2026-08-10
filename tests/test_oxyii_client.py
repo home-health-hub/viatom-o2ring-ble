@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import struct
 
 import pytest
 
-from viatom_o2ring_ble.oxyii_client import InsufficientMtuError, OxyIIClient, supported_oxyii
+from viatom_o2ring_ble.oxyii_client import (
+    InsufficientMtuError,
+    OxyIIClient,
+    _oxyii_advertisement_mode,
+    _select_oxyii_devices,
+    supported_oxyii,
+)
 from viatom_o2ring_ble.oxyii_const import MANUFACTURER_ID
 from viatom_o2ring_ble.oxyii_protocol import crc8
 
@@ -35,6 +42,54 @@ def test_supported_oxyii_matches_known_signals(name, manufacturer_data):
 )
 def test_supported_oxyii_rejects_unrelated_signals(name, manufacturer_data):
     assert supported_oxyii(name, manufacturer_data) is False
+
+
+def test_oxyii_advertisement_mode_sync_via_manufacturer_id():
+    assert _oxyii_advertisement_mode(None, {MANUFACTURER_ID: b"\x01\x02"}) == "sync"
+
+
+def test_oxyii_advertisement_mode_sync_via_name():
+    assert _oxyii_advertisement_mode("S8-AW-1234", None) == "sync"
+
+
+def test_oxyii_advertisement_mode_recording_only():
+    # Recording mode uses a *different* BLE address than sync mode -- this
+    # must not be conflated with "sync", or discover_oxyii() could hand
+    # back an address that will never actually connect.
+    assert _oxyii_advertisement_mode("T8520_e85a", None) == "recording"
+
+
+def test_oxyii_advertisement_mode_unrelated_device():
+    assert _oxyii_advertisement_mode("O2Ring", None) is None
+    assert _oxyii_advertisement_mode(None, None) is None
+
+
+class _FakeDevice:
+    def __init__(self, address):
+        self.address = address
+
+
+def test_select_oxyii_devices_prefers_sync_over_recording():
+    sync_found = {"11:11:11:11:11:11": _FakeDevice("11:11:11:11:11:11")}
+    recording_found = {"22:22:22:22:22:22": _FakeDevice("22:22:22:22:22:22")}
+
+    result = _select_oxyii_devices(sync_found, recording_found)
+
+    assert [d.address for d in result] == ["11:11:11:11:11:11"]
+
+
+def test_select_oxyii_devices_falls_back_to_recording_when_no_sync(caplog):
+    caplog.set_level(logging.WARNING)
+    recording_found = {"22:22:22:22:22:22": _FakeDevice("22:22:22:22:22:22")}
+
+    result = _select_oxyii_devices({}, recording_found)
+
+    assert [d.address for d in result] == ["22:22:22:22:22:22"]
+    assert "recording mode" in caplog.text
+
+
+def test_select_oxyii_devices_empty():
+    assert _select_oxyii_devices({}, {}) == []
 
 
 def _build_reply(opcode: int, payload: bytes, seq: int = 0) -> bytes:
