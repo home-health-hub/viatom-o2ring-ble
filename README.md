@@ -300,6 +300,21 @@ init `0`, no reflection, no xor-out -- the legacy protocol's CRC-8 is
 bit-reflected and produces different values for the same bytes). See
 [`oxyii_protocol.py`](src/viatom_o2ring_ble/oxyii_protocol.py).
 
+**Discovery prefers sync-mode addresses, on purpose.** The T8520
+advertises with *two different BLE addresses* depending on state: a
+"public-style" address in recording mode (worn, actively recording --
+name prefix `T8520_<last4>`, GATT service not reliably exposed) vs. a
+Random Static address in OxyII/sync mode (idle, or briefly after a
+recording finalizes -- name prefix `S8-AW`, the mode that actually works
+for a connection). `discover_oxyii()` recognizes both, but if it sees
+*any* sync-mode device during the scan, it returns only sync-mode
+devices -- a recording-mode address is reliably the wrong one to act on,
+not just unconfirmed. It only falls back to a recording-mode address
+(with a logged warning) if no sync-mode device was seen at all in the
+scan window. If discovery keeps returning a device whose connection
+attempts fail or time out, it's very likely this: wear the ring or press
+its button to trigger a re-advertise into sync mode, then scan again.
+
 **Connecting requires a specific handshake**, in order:
 negotiate ATT MTU (517 requested; 247 is the confirmed-working floor --
 below that, file-transfer commands are *silently* dropped, not

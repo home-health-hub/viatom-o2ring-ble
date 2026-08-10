@@ -30,10 +30,16 @@ MANUFACTURER_ID = 0xF34E
 #: In "recording mode" (worn, actively recording) the device instead
 #: advertises as local name "T8520_<last4>" with manufacturer ID 0x036F
 #: (the same Viatom ID the legacy family uses) and a stripped GATT layout
-#: that does not reliably expose the OxyII service. supported() below
-#: recognizes this name prefix too, but a device only found this way
-#: cannot be connected to for file transfer until it re-advertises in
-#: OxyII mode (worn or pressing the button is enough to trigger that).
+#: that does not reliably expose the OxyII service -- and, critically, a
+#: *different BLE address* than the one it uses in sync mode (a
+#: "public-style" address here vs. Random Static in sync mode). A device
+#: only ever seen this way cannot be connected to for a real session at
+#: all: it isn't just "maybe not ready yet," its address is reliably the
+#: wrong one. client.py's discover_oxyii() recognizes this name prefix
+#: (via supported_oxyii()) but never returns an address seen only this
+#: way if a sync-mode address was also found -- see
+#: _select_oxyii_devices(). Worn or pressing the button is enough to
+#: trigger a re-advertise into sync mode.
 RECORDING_MODE_NAME_PREFIX = "T8520_"
 
 #: GATT service/characteristic UUIDs for the OxyII protocol. Entirely
