@@ -51,9 +51,10 @@ before relying on it.
   current alert thresholds, vibration strength, mode) via CMD_INFO, and
   writes configuration: clock sync, SpO2/heart-rate vibration alert
   thresholds, vibration strength, and screen always-on/brightness.
-- Ships a `viatom-o2ring` CLI for one-off use without writing any code
-  (legacy "oxy" family only -- see the note in
-  [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520)).
+- Ships a `viatom-o2ring` CLI for one-off use without writing any code,
+  covering both device families (`--oxyii` for the O2Ring-S; see
+  [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520) for what that mode
+  does and doesn't cover).
 - Separately, supports the O2Ring-S (T8520) via `OxyIIClient`: live SpO2/
   heart-rate streaming, and listing/downloading/decoding its stored
   recordings -- a completely different protocol from everything above;
@@ -217,13 +218,24 @@ viatom-o2ring --address AA:BB:CC:DD:EE:FF --download 20260116233312.vld --csv
 
 # Sync the device clock and set alert thresholds in one session
 viatom-o2ring --address AA:BB:CC:DD:EE:FF --sync-time --set-o2-alert 90 --set-hr-alert-high 140
+
+# Same operations against an O2Ring-S (T8520) instead, via --oxyii
+viatom-o2ring --oxyii --discover
+viatom-o2ring --oxyii --address AA:BB:CC:DD:EE:FF --info
+viatom-o2ring --oxyii --address AA:BB:CC:DD:EE:FF --list-files
+viatom-o2ring --oxyii --address AA:BB:CC:DD:EE:FF --download 20260427105949 --csv
+viatom-o2ring --oxyii --address AA:BB:CC:DD:EE:FF --sync-time
 ```
 
 Run `viatom-o2ring --help` for all options.
 
-**The CLI only speaks the legacy protocol (`O2RingClient`).** There is no
-`--oxyii` mode yet -- an O2Ring-S needs the `OxyIIClient` library API
-directly (see above) until CLI support is added as a follow-up.
+**`--oxyii` covers discovery, streaming, `--info`, `--list-files`,
+`--download`/`--csv`/`--out`, and `--sync-time` -- not the `--set-*`
+config-write flags.** `OxyIIClient` has no `SET_CONFIG` support (see
+[OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520)), so combining `--oxyii`
+with any of those, or with `--legacy-sensors` (no OxyII equivalent),
+fails fast with a clear error rather than an `AttributeError` partway
+through a run.
 
 ## Protocol notes
 
@@ -320,7 +332,6 @@ module docstring for why the order matters.
 - PPG waveform sample decoding: present in `LIVE_SAMPLES_B` replies and
   kept in `OxyIIReading.raw`, but not decoded -- the upstream repo notes
   this itself as "documented; not yet exercised."
-- CLI integration -- see [CLI usage](#cli-usage) above.
 
 **Stored-file format ("Format A")** is also unrelated to this package's
 `.vld` format: a fixed 10-byte header, then 3-byte-per-second sample
