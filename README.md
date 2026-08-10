@@ -17,12 +17,13 @@ writing device settings such as vibration alert thresholds.
 > it has been confirmed against real hardware.
 
 > [!IMPORTANT]
-> **"O2Ring S" is a different, incompatible protocol despite the name.**
-> O2Ring S, S8-AW, Band-WU, and SHQO2Pro use a newer protocol generation
-> ("OxyII") over a completely different BLE service UUID. Nothing in this
-> package works against them -- see [Protocol notes](#protocol-notes). If
-> your device's box or app says "O2Ring S" rather than plain "O2Ring",
-> this library does not support it.
+> **"O2Ring S" (T8520) is a different protocol, now separately supported.**
+> O2Ring S, S8-AW, Band-WU, and SHQO2Pro speak a newer protocol generation
+> ("OxyII") over a completely different BLE service UUID -- `O2RingClient`
+> still does not, and cannot, work against them. Use `OxyIIClient` instead;
+> see [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520). This support is
+> newer and less battle-tested than the rest of the package -- see that
+> section's own status notes.
 
 ## Disclaimer
 
@@ -50,7 +51,13 @@ before relying on it.
   current alert thresholds, vibration strength, mode) via CMD_INFO, and
   writes configuration: clock sync, SpO2/heart-rate vibration alert
   thresholds, vibration strength, and screen always-on/brightness.
-- Ships a `viatom-o2ring` CLI for one-off use without writing any code.
+- Ships a `viatom-o2ring` CLI for one-off use without writing any code
+  (legacy "oxy" family only -- see the note in
+  [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520)).
+- Separately, supports the O2Ring-S (T8520) via `OxyIIClient`: live SpO2/
+  heart-rate streaming, and listing/downloading/decoding its stored
+  recordings -- a completely different protocol from everything above;
+  see [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520).
 
 ## Requirements
 
@@ -140,6 +147,56 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+### O2Ring-S (T8520) live streaming and file download
+
+```python
+import asyncio
+
+from viatom_o2ring_ble import OxyIIClient, OxyIIReading, parse_oxyii_file
+
+
+def on_reading(reading: OxyIIReading) -> None:
+    if reading.worn and not reading.calibrating:
+        print(f"SpO2 {reading.spo2}%, pulse {reading.heart_rate} bpm, battery {reading.battery}%")
+
+
+async def main() -> None:
+    client = OxyIIClient("AA:BB:CC:DD:EE:FF", on_reading=on_reading)
+    await client.async_start()
+    try:
+        await asyncio.Event().wait()  # run until interrupted
+    finally:
+        await client.async_stop()
+
+
+asyncio.run(main())
+```
+
+```python
+import asyncio
+
+from viatom_o2ring_ble import OxyIIClient, parse_oxyii_filename_timestamp, write_oxyii_csv
+
+
+async def main() -> None:
+    client = OxyIIClient("AA:BB:CC:DD:EE:FF")
+    await client.async_connect()
+    try:
+        for entry in await client.get_file_list():
+            header, records = await client.download_and_parse_file(entry.name)
+            print(f"{entry.name}: {header.record_count} records, avg SpO2 {header.spo2_avg}%")
+            write_oxyii_csv(records, f"{entry.name}.csv", parse_oxyii_filename_timestamp(entry.name))
+    finally:
+        await client.async_disconnect()
+
+
+asyncio.run(main())
+```
+
+Use `discover_oxyii()` in place of `discover()` to find a T8520's
+address. See [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520) for
+what's and isn't implemented.
+
 ## CLI usage
 
 ```bash
@@ -163,6 +220,10 @@ viatom-o2ring --address AA:BB:CC:DD:EE:FF --sync-time --set-o2-alert 90 --set-hr
 ```
 
 Run `viatom-o2ring --help` for all options.
+
+**The CLI only speaks the legacy protocol (`O2RingClient`).** There is no
+`--oxyii` mode yet -- an O2Ring-S needs the `OxyIIClient` library API
+directly (see above) until CLI support is added as a follow-up.
 
 ## Protocol notes
 
@@ -189,7 +250,7 @@ reading), `FACTORY_DEFAULT` (24), `FILE_OPEN`/`FILE_READ`/`FILE_CLOSE`
 exact request payloads and [`protocol.py`](src/viatom_o2ring_ble/protocol.py)
 for framing and the live-reading/device-info decoders.
 
-### Not compatible: "O2Ring S" and OxyII devices
+### OxyII (O2Ring-S / T8520)
 
 Viatom's current SDK docs (viatom-develop/LepuDemo) list "O2Ring S",
 "S8-AW", "Band-WU", and "SHQO2Pro" under a separate, newer protocol
@@ -198,9 +259,79 @@ generation ("OxyII") with its own GATT service --
 `SERVICE_UUID` above. Everything else in that same doc's device table
 (O2Ring, O2M/O2 Max, BabyO2, CheckO2, SleepO2, KidsO2, CMRing, and
 several more) shares this package's `14839ac4-...` service and command
-set. If your device is actually an O2Ring S rather than a plain O2Ring,
-BLE service discovery against `SERVICE_UUID` will simply come back
-empty -- there's no partial compatibility to expect.
+set instead. `O2RingClient`/`discover()`/`supported()` never work
+against an OxyII device -- BLE service discovery against `SERVICE_UUID`
+simply comes back empty, no partial compatibility to expect.
+
+`OxyIIClient` (in `oxyii_client.py`, alongside `oxyii_const.py`/
+`oxyii_protocol.py`/`oxyii_commands.py`/`oxyii_data.py`/`oxyii_file.py`)
+is a from-scratch, separate implementation targeting the T8520
+specifically, built from and adapted against
+[nglessner/o2ring-s-protocol](https://github.com/nglessner/o2ring-s-protocol)
+-- a reverse-engineered, MIT-licensed protocol reference with a working
+Python implementation, verified end-to-end (byte-exact against
+vendor-app file exports via SHA-256, real live-reading/file-transfer
+round-trips) against a real T8520. See
+[Acknowledgments](#acknowledgments).
+
+> [!WARNING]
+> This support is newer than the rest of the package and has not been
+> independently re-verified against real hardware here -- it's ported
+> from a source that has verified it, which is a meaningfully stronger
+> starting point than this package's other protocol notes had, but still
+> worth flagging distinctly.
+
+**Frame format** is a completely different envelope from the legacy
+protocol: `0xA5 | cmd | ~cmd | flag | seq | len_lo | len_hi | payload |
+crc`, checksummed with a different CRC-8 variant (polynomial `0x07`,
+init `0`, no reflection, no xor-out -- the legacy protocol's CRC-8 is
+bit-reflected and produces different values for the same bytes). See
+[`oxyii_protocol.py`](src/viatom_o2ring_ble/oxyii_protocol.py).
+
+**Connecting requires a specific handshake**, in order:
+negotiate ATT MTU (517 requested; 247 is the confirmed-working floor --
+below that, file-transfer commands are *silently* dropped, not
+error-replied, which is easy to misdiagnose as a hang), auth (`cmd=0xFF`,
+one-way, no reply), a required-but-unexplained `cmd=0x10` setup step,
+clock sync, and a `GET_CONFIG` read that must be consumed before any
+file-transfer command (mixing it with a concurrent `READ_FILE_START` can
+make the config reply get mistaken for a file chunk). `OxyIIClient`
+performs this whole sequence automatically in `_connect()`; see its
+module docstring for why the order matters.
+
+**Not implemented**, deliberately:
+
+- `SET_CONFIG` (cmd=0x01): a device-settings write path whose field
+  semantics are, per the upstream repo, mostly undocumented ("read
+  GET_CONFIG before and after a write to discover them empirically").
+  Wrapping a loosely-specified write command risked silently writing the
+  wrong field/value to a real device.
+- `FACTORY_RESET_ALL` (cmd=0xEE): per the upstream repo, powers the ring
+  off and refuses to re-advertise until woken by USB power. There's no
+  legitimate reason for this package to send it, so it isn't wrapped at
+  all (unlike `FACTORY_RESET`/cmd=0xE3, which *is* wrapped -- destructive,
+  but recoverable, and mirrors `commands.factory_default()`'s existing
+  "use deliberately" pattern).
+- AES payload encryption: the protocol supports it per-command, but every
+  command actually observed on real T8520 firmware goes in plaintext (the
+  AES path only activates once auth returns a session key, which this
+  firmware never does) -- so no AES encrypt/decrypt is implemented, to
+  avoid an unused `pycryptodome` dependency.
+- PPG waveform sample decoding: present in `LIVE_SAMPLES_B` replies and
+  kept in `OxyIIReading.raw`, but not decoded -- the upstream repo notes
+  this itself as "documented; not yet exercised."
+- CLI integration -- see [CLI usage](#cli-usage) above.
+
+**Stored-file format ("Format A")** is also unrelated to this package's
+`.vld` format: a fixed 10-byte header, then 3-byte-per-second sample
+records (SpO2, heart rate, status flags), then -- once the recording is
+finalized -- a 48-byte trailer with session summary stats. Unlike `.vld`,
+records carry no embedded timestamp; the recording's start time is only
+available from its own filename (`YYYYMMDDhhmmss`, as returned by
+`get_file_list()`) -- see `parse_oxyii_filename_timestamp()`. A file can
+reach its full byte count before the trailer has actually flushed, so
+`oxyii_file.parse()` anchors on the trailer's sub-magic bytes rather than
+trusting size alone; see `OxyIIFileHeader.trailer_confirmed`.
 
 ### Two live-reading commands
 
@@ -318,6 +449,19 @@ Contributions are welcome!
   in this package's CMD_CONFIG validation (`commands.py`) that had been
   sourced only from o2r. See [Protocol notes](#protocol-notes) for the
   specifics.
+- OxyII (O2Ring-S / T8520) support is built on
+  [nglessner/o2ring-s-protocol](https://github.com/nglessner/o2ring-s-protocol),
+  a reverse-engineered, MIT-licensed protocol reference with a working
+  Python reference implementation (frame codec, CRC-8, auth-key
+  derivation, GET_INFO/GET_FILE_LIST parsing), verified end-to-end
+  against a real T8520 (byte-exact against vendor-app file exports via
+  SHA-256, live-reading and file-transfer round-trips). `oxyii_*.py`'s
+  frame codec, CRC-8, and session-key derivation are adapted directly
+  from it; the client/command/data/file-parsing layers around them are
+  this package's own, patterned after `O2RingClient` for consistency with
+  the rest of the package. See
+  [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520) for what's ported vs.
+  original, and what's deliberately not implemented.
 - Code review, ported implementation, and documentation assisted by [Claude](https://www.anthropic.com/claude).
 
 ## License
