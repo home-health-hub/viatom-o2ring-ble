@@ -67,3 +67,10 @@ implementation against real hardware, which is a meaningfully stronger
 starting point than the rest of this package had -- but the port itself,
 as adapted into this package's own client/module structure, has not been
 independently re-verified against a real T8520 here.
+
+CI (`.github/workflows/ci.yml`, added later than the rest of this
+package) runs flake8 + pytest, and separately builds the Docker image and
+verifies `viatom-o2ring --version`/`--help` run inside it, pushing to
+GHCR on pushes to `main`. That only exercises CLI startup inside a
+container, not a live BLE connection -- same caveat as everything else in
+this section, not an additional one.

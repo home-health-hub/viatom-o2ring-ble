@@ -55,6 +55,8 @@ before relying on it.
   covering both device families (`--oxyii` for the O2Ring-S; see
   [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520) for what that mode
   does and doesn't cover).
+- A prebuilt Docker image (`ghcr.io/bonelifer/viatom-o2ring-ble`) wraps
+  that same CLI -- see [Docker](#docker).
 - Separately, supports the O2Ring-S (T8520) via `OxyIIClient`: live SpO2/
   heart-rate streaming, and listing/downloading/decoding its stored
   recordings -- a completely different protocol from everything above;
@@ -236,6 +238,45 @@ config-write flags.** `OxyIIClient` has no `SET_CONFIG` support (see
 with any of those, or with `--legacy-sensors` (no OxyII equivalent),
 fails fast with a clear error rather than an `AttributeError` partway
 through a run.
+
+## Docker
+
+```bash
+docker run --rm --network host -v /var/run/dbus:/var/run/dbus \
+  ghcr.io/bonelifer/viatom-o2ring-ble:latest --discover
+```
+
+CI builds this image on every push to `main` (verifying `--version` and
+`--help` actually run inside it) and pushes it to GHCR, so the image
+itself is exercised, but only its CLI startup, not a live BLE connection
+-- see below. The image's entrypoint is `viatom-o2ring`; any flag from
+[CLI usage](#cli-usage) works the same way, e.g.:
+
+```bash
+docker run --rm --network host -v /var/run/dbus:/var/run/dbus \
+  ghcr.io/bonelifer/viatom-o2ring-ble:latest --address AA:BB:CC:DD:EE:FF --info
+```
+
+Or build locally instead of using the prebuilt image:
+
+```bash
+docker build -t viatom-o2ring-ble .
+docker run --rm --network host -v /var/run/dbus:/var/run/dbus viatom-o2ring-ble --discover
+```
+
+BLE access from inside a container needs the host's D-Bus system bus and
+Bluetooth adapter, which the commands above reach via `--network host`
+and the `/var/run/dbus` bind mount. **This part is unverified**: BLE from
+containers is finicky across host setups, and running the CLI directly on
+bare metal is the well-tested path. If Docker doesn't see the adapter,
+try adding `--privileged` or check that BlueZ's D-Bus service is
+reachable at the mounted socket.
+
+There's no `docker-compose.yml` here -- compose implies a persistent
+running service, which is what
+[`viatom-o2ring-daemon`](https://github.com/bonelifer/viatom-o2ring-daemon)
+is for; this package is a one-shot CLI plus a library, so a bare `docker
+run` per invocation fits better.
 
 ## Protocol notes
 
