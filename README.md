@@ -3,9 +3,12 @@
 A standalone Python client for Viatom/Wellue pulse oximeters that share
 Viatom's "oxy" BLE protocol family: O2Ring, Checkme O2 (including the
 Sanei-branded "CMRing" variant), KidsO2, RingO2, SleepO2, and the O2 Max.
-It connects over Bluetooth Low Energy, and supports live SpO2/heart-rate
-streaming, downloading and decoding stored measurement sessions, and
-writing device settings such as vibration alert thresholds.
+The O2Ring S (T8520), S8-AW, Band-WU, and SHQO2Pro, which speak a
+completely different protocol, are supported separately via `OxyIIClient`
+-- see [OxyII (O2Ring-S / T8520)](#oxyii-o2ring-s--t8520). It connects
+over Bluetooth Low Energy, and supports live SpO2/heart-rate streaming,
+downloading and decoding stored measurement sessions, and writing device
+settings such as vibration alert thresholds.
 
 > [!WARNING]
 > **Work in progress -- not yet verified against real hardware.** Every
