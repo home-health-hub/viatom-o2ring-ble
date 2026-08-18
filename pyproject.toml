@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bonelifer/viatom-o2ring-ble"
+Homepage = "https://github.com/home-health-hub/viatom-o2ring-ble"
 
 [project.scripts]
 viatom-o2ring = "viatom_o2ring_ble.cli:main"
