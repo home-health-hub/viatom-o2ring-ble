@@ -75,7 +75,7 @@ before relying on it.
 ## Installation
 
 ```bash
-pip install git+https://github.com/bonelifer/viatom-o2ring-ble.git
+pip install git+https://github.com/home-health-hub/viatom-o2ring-ble.git
 ```
 
 ## Library usage
@@ -446,8 +446,8 @@ Do not match on `Checkme` alone -- that prefix belongs to the unrelated
 
 Contributions are welcome!
 
-- **Bug reports**: [Open an issue](https://github.com/bonelifer/viatom-o2ring-ble/issues).
-- **Everything else** (questions, feature requests, ideas, general discussion): [Use Discussions](https://github.com/bonelifer/viatom-o2ring-ble/discussions).
+- **Bug reports**: [Open an issue](https://github.com/home-health-hub/viatom-o2ring-ble/issues).
+- **Everything else** (questions, feature requests, ideas, general discussion): [Use Discussions](https://github.com/home-health-hub/viatom-o2ring-ble/discussions).
 - Pull requests are welcome for bug fixes or discussed features.
 
 ## Acknowledgments
