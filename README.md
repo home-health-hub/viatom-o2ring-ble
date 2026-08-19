@@ -1,5 +1,9 @@
 # viatom-o2ring-ble
 
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white) ![Bluetooth LE](https://img.shields.io/badge/Bluetooth-LE-0082FC?logo=bluetooth&logoColor=white)
+
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](https://github.com/home-health-hub/viatom-o2ring-ble/blob/main/LICENSE) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/home-health-hub/viatom-o2ring-ble#contributing) [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/home-health-hub/viatom-o2ring-ble/discussions)
+
 A standalone Python client for Viatom/Wellue pulse oximeters that share
 Viatom's "oxy" BLE protocol family: O2Ring, Checkme O2 (including the
 Sanei-branded "CMRing" variant), KidsO2, RingO2, SleepO2, and the O2 Max.
