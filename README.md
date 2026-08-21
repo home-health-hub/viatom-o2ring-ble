@@ -353,7 +353,19 @@ module docstring for why the order matters.
   avoid an unused `pycryptodome` dependency.
 - PPG waveform sample decoding: present in `LIVE_SAMPLES_B` replies and
   kept in `OxyIIReading.raw`, but not decoded -- the upstream repo notes
-  this itself as "documented; not yet exercised."
+  this itself as "documented; not yet exercised." `RtReading.waveform`
+  (the `0x1B`/`RT_DATA` path -- see "Two live-reading commands" below) is
+  in the same undecoded-raw-bytes state. An untested hypothesis worth
+  checking against real captured waveform bytes: a different Wellue-family
+  pulse oximeter (OxySmart, over the generic Nordic UART BLE service
+  rather than Viatom's own command protocol) encodes its systolic-peak
+  samples by setting each byte's most significant bit, i.e. decode with
+  `value - 128 if value > 127 else value`, per
+  [tonyfu97/Pulse-Ox-BLE](https://github.com/tonyfu97/Pulse-Ox-BLE). Since
+  Viatom is the OEM behind a number of Wellue-branded devices, the same
+  peak-marking convention plausibly applies here too, but this hasn't been
+  verified against an O2Ring's own waveform bytes and should be treated as
+  a hypothesis, not a fact, until it is.
 
 **Stored-file format ("Format A")** is also unrelated to this package's
 `.vld` format: a fixed 10-byte header, then 3-byte-per-second sample
